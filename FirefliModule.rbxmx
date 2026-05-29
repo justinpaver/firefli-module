@@ -1,0 +1,442 @@
+<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4">
+	<Meta name="ExplicitAutoJoints">true</Meta>
+	<External>null</External>
+	<External>nil</External>
+	<Item class="ModuleScript" referent="RBX3737CB0B1CF34F3CAE1C770500F696A7">
+		<Properties>
+			<Content name="LinkedSource"><null></null></Content>
+			<ProtectedString name="Source"><![CDATA[--[[
+  ___ _          __ _ _ 
+ | __(_)_ _ ___ / _| (_)
+ | _|| | '_/ -_)  _| | |
+ |_| |_|_| \___|_| |_|_|
+
+ Firefli Module
+ 
+ To initialise the module from a script, you simply have to call this module via:
+ local Firefli = require(path.to.Firefli).new(workspaceId, apiKey)
+ 
+ You can then call methods via Firefli:methodName(data) or Firefli:methodName() if the method does not require data, for example:
+ 
+ Firefli:GetWorkspaceInfo()
+ Firefli:CreateNotice({
+ 	userId = 1234567890,
+ 	startTime = 
+ })
+ 
+ For a full list of methods, see below. Don't modify this file UNLESS you know what you're doing.
+ Usage of this module assumes you have development knowledge.
+ Don't know how to code? Don't use the module, or you can ask AI how to use it.
+
+]]
+
+local HttpService = game:GetService("HttpService")
+local BaseUrl = "https://app.firefli.net/api/public/v1/workspace/"
+
+local Firefli = {}
+Firefli.__index = Firefli
+
+function Firefli.new(workspaceId, apiKey)
+	if typeof(apiKey) ~= "string" then
+		error("API key must be a string")
+	end
+	if typeof(workspaceId) ~= "number" then
+		error("Workspace ID must be a number")
+	end
+
+	local self = setmetatable({}, Firefli)
+	self.ApiKey = apiKey
+	self.WorkspaceId = workspaceId
+	return self
+end
+
+--         [ HELPER FUNCTION TO MAKE REQUESTS ]         --
+
+local function makeRequest(self, endpoint, method, data)
+	local headers = {
+		["Authorization"] = "Bearer " .. self.ApiKey,
+		["Content-Type"] = "application/json"
+	}
+
+	local url = string.format("%s%d%s", BaseUrl, self.WorkspaceId, endpoint)
+
+	local success, response = pcall(function()
+		return HttpService:RequestAsync({
+			Url = url,
+			Method = method,
+			Headers = headers,
+			Body = data and HttpService:JSONEncode(data) or nil
+		})
+	end)
+
+	if not success then
+		warn("[Firefli API] Network Error: " .. tostring(response))
+		return nil, "Network Error"
+	end
+
+	local decodeSuccess, decodedBody = pcall(function()
+		return HttpService:JSONDecode(response.Body)
+	end)
+
+	if response.Success then
+		return decodedBody, nil
+	else
+		local errorMessage = decodeSuccess and decodedBody or response.StatusMessage
+		warn(string.format("[Firefli API] HTTP %d: %s", response.StatusCode, tostring(errorMessage)))
+		return nil, errorMessage
+	end
+end
+
+--         [ GENERAL METHODS ]         --
+
+function Firefli:GetWorkspaceInfo()
+	return makeRequest(self, "/info", "GET")
+end
+
+function Firefli:GetLeaderboard()
+	return makeRequest(self, "/leaderboard", "GET")
+end
+
+function Firefli:GetMembers()
+	return makeRequest(self, "/members", "GET")
+end
+
+function Firefli:GetBirthdays()
+	return makeRequest(self, "/birthdays", "GET")
+end
+
+--         [ ACTIVITY-RELATED METHODS ]         --
+
+function Firefli:GetActivity()
+	return makeRequest(self, "/activity", "GET")
+end
+
+function Firefli:GetUserActivity(userId:number)
+	return makeRequest(self, "/user/" .. userId .. "/activity", "GET")
+end
+
+function Firefli:GetCurrentActivity(userId:number)
+	return makeRequest(self, "/user/" .. userId .. "/pactivity", "GET")
+end
+
+function Firefli:StartActivity(userId:number, info: {
+	time:string
+	})
+	return makeRequest(self, "/user/" .. userId .. "/activity/start", "POST", info)
+end
+
+function Firefli:EndActivity(userId:number, info: {
+	time:string
+	})
+	return makeRequest(self, "/user/" .. userId .. "/activity/end", "POST", info)
+end
+
+--         [ SESSION-RELATED METHODS ]         --
+
+function Firefli:GetSessions()
+	return makeRequest(self, "/sessions/calendar", "GET")
+end
+
+function Firefli:GetSessionRoles(sessionId:string)
+	return makeRequest(self, "/sessions/" .. sessionId .. "/roles", "GET")
+end
+
+function Firefli:AssignSessionRoles(sessionId:string, info: {
+	action:string,
+	userId:string,
+	roleId:string,
+	slot:number
+	})
+	return makeRequest(self, "/sessions/" .. sessionId .. "/roles", "POST", info)
+end
+
+function Firefli:ChangeHost(sessionId:string, info: {
+	ownerId:string
+	})
+	return makeRequest(self, "/sessions/" .. sessionId .. "/roles", "POST", info)
+end
+
+function Firefli:CreateUnscheduledSessionWithExistingSessionType(info: {
+	sessionTypeId:string,
+	date:string,
+	time:string,
+	ownerId:string
+	})
+	return makeRequest(self, "/sessions/create-unscheduled", "POST", info)
+end
+
+function Firefli:CreateUnscheduledSessionWithNewSessionType(info: {
+	sessionType: {
+		name: string,
+		description: string,
+		slots: { { id: string, name: string, number: number } },
+		statues: { { id: string, name: string } }
+	},
+	date: string,
+	time: string,
+	ownerId: string
+	})
+	return makeRequest(self, "/sessions/create-unscheduled", "POST", info)
+end
+
+function Firefli:CreateScheduledSessionFromId(info: {
+	scheduleId: string,
+	date: string
+	})
+	return makeRequest(self, "/sessions/create-scheduled", "POST", info)
+end
+
+function Firefli:CreateScheduledSessionWithNewType(info: {
+	sessionType: {
+		name: string,
+		description: string,
+		slots: { { id: string, name: string, number: number } },
+		schedule: {
+			days: { number }, -- Array of days (e.g., 1 for Monday, 3 for Wednesday)
+			hour: number,
+			minute: number
+		}
+	},
+	date: string
+	})
+	return makeRequest(self, "/sessions/create-scheduled", "POST", info)
+end
+
+--          [ CONTENT-RELATED METHODS ]          --
+
+function Firefli:GetWall()
+	return makeRequest(self, "/wall", "GET")
+end
+
+function Firefli:PostWall(info: {
+	content:string,
+	authorId:number,
+	image:string?
+	})
+	return makeRequest(self, "/wall", "POST", info)
+end
+
+function Firefli:GetDocuments()
+	return makeRequest(self, "/docs", "GET")
+end
+
+function Firefli:GetDocumentById(id:string)
+	return makeRequest(self, "/docs/" .. id, "GET")
+end
+
+--         [ ALLIANCE-RELATED METHODS ]         --
+
+--    There is no documentation for this yet    --
+
+--          [ NOTICE-RELATED METHODS ]          --
+
+function Firefli:ListNotices()
+	return makeRequest(self, "/notices", "GET")
+end
+
+function Firefli:CreateNotice(info: {
+	userId:number,
+	startTime:string,
+	reason:string,
+	endTime:string?
+	})
+	return makeRequest(self, "/notices", "POST", info)
+end
+
+function Firefli:GetNoticeById(id:string)
+	return makeRequest(self, "/notices/" .. id, "GET")
+end
+
+function Firefli:UpdateNoticeStatus(id:string, info: {
+	approved:boolean,
+	reviewComment:string,
+	endTime:string,
+	revoked:boolean
+	})
+	return makeRequest(self, "/notices/" .. id, "PATCH", info)
+end
+
+function Firefli:StopActiveNotice(id:string)
+	return makeRequest(self, "/notices/" .. id, "DELETE")
+end
+
+function Firefli:GetUsersNotices(userId:number)
+	return makeRequest(self, "/notices/users/" .. userId, "GET")
+end
+
+function Firefli:GetSummaryStatistics()
+	return makeRequest(self, "/notices/summary", "GET")
+end
+
+--          [ RECOMMENDATIONS-RELATED METHODS ]          --
+
+function Firefli:GetRecommendations()
+	return makeRequest(self, "/recommendations", "GET")
+end
+
+function Firefli:CreateRecommendation(info: {
+	targetUserId:number,
+	targetUsername:string,
+	reason:string,
+	createdById:number,
+	targetPicture:string?,
+	createdByName:string?
+	})
+	return makeRequest(self, "/recommendations", "POST", info)
+end
+
+function Firefli:GetRecommendationById(id:string)
+	return makeRequest(self, "/recommendations/" .. id, "GET")
+end
+
+function Firefli:UpdateRecommendation(id:string,info: {
+	status:string?,
+	statusChangedById:number?,
+	statusChangedByName:string?,
+	reason:string?,
+	editedById:number?,
+	editedByName:string?
+	})
+	return makeRequest(self, "/recommendations/" .. id, "PATCH", info)
+end
+
+function Firefli:DeleteRecommendation(id:string)
+	return makeRequest(self, "/recommendations/" .. id, "DELETE")
+end
+
+function Firefli:ListVotes(id:string)
+	return makeRequest(self, "/recommendations/" .. id .. "/vote", "GET")
+end
+
+function Firefli:AddVote(id:string, info: {
+	userId:number,
+	})
+	return makeRequest(self, "/recommendations/" .. id .. "/vote", "POST", info)
+end
+
+function Firefli:RemoveVote(id:string, info: {
+	userId:number,
+	})
+	return makeRequest(self, "/recommendations/" .. id .. "/vote", "DELETE", info)
+end
+
+function Firefli:GetComments(id:string)
+	return makeRequest(self, "/recommendations/" .. id .. "/comments", "GET")
+end
+
+function Firefli:AddComment(id:string, info: {
+	authorId:number,
+	content:string,
+	authorName:string?,
+	authorPicture:string?,
+	image:string?
+	})
+	return makeRequest(self, "/recommendations/" .. id .. "/comments", "POST", info)
+end
+
+function Firefli:GetComment(recId:string, comId:string)
+	return makeRequest(self, "/recommendations/" .. recId .. "/comments/" .. comId, "GET")
+end
+
+--          [ USERBOOK-RELATED METHODS ]          --
+
+function Firefli:GetEntries()
+	return makeRequest(self, "/userbook/entries", "GET")
+end
+
+function Firefli:GetEntriesWithRedacted()
+	return makeRequest(self, "/userbook/entries?includeRedacted=true", "GET")
+end
+
+function Firefli:GetEntriesByUserId(userId:number)
+	return makeRequest(self, "/userbook/entries?userId=" .. userId, "GET")
+end
+
+function Firefli:GetEntriesByUserIdWithRedacted(userId:number)
+	return makeRequest(self, "/userbook/entries?userId=" .. userId .. "&includeRedacted=true", "GET")
+end
+
+function Firefli:CreateNote(info: {
+	userId:number,
+	reason:string
+	})
+	return makeRequest(self, "/userbook/note", "POST", info)
+end
+
+function Firefli:CreateWarning(info: {
+	userId:number,
+	reason:string
+	})
+	return makeRequest(self, "/userbook/warning", "POST", info)
+end
+
+function Firefli:CreatePromotion(info: {
+	userId:number,
+	reason:string
+	})
+	return makeRequest(self, "/userbook/promotion", "POST", info)
+end
+
+function Firefli:CreateDemotion(info: {
+	userId:number,
+	reason:string
+	})
+	return makeRequest(self, "/userbook/demotion", "POST", info)
+end
+
+function Firefli:CreateTermination(info: {
+	userId:number,
+	reason:string
+	})
+	return makeRequest(self, "/userbook/termination", "POST", info)
+end
+
+function Firefli:CreateRankChange(info: {
+	userId:number,
+	reason:string,
+	targetRank:number
+	})
+	return makeRequest(self, "/userbook/rank-change", "POST", info)
+end
+
+--          [ MODERATION-RELATED METHODS ]          --
+
+function Firefli:CreateModerationCase(info: {
+	targetUserId:number,
+	authorUserId:number,
+	reason:string,
+	action:string,
+	isPermanent:boolean,
+	banDuration:number?,
+	expiresAt:string?,
+	placeIds:{number}?
+	})
+	return makeRequest(self, "/moderation/cases", "POST", info)
+end
+
+function Firefli:GetUserCaseHistory(userId:number)
+	return makeRequest(self, "/moderation/user/" .. userId, "GET")
+end
+
+function Firefli:GetLivePunishments()
+	return makeRequest(self, "/moderation/live", "GET")
+end
+
+function Firefli:RevokeCase(caseId:string, info: {
+	revokedByUserId:number,
+	reason:string
+	})
+	return makeRequest(self, "/moderation/cases/" .. caseId .. "/revoke", "POST", info)
+end
+
+return Firefli]]></ProtectedString>
+			<string name="ScriptGuid">{98F7B267-1C60-4DF0-83EF-BCB00B01E829}</string>
+			<BinaryString name="AttributesSerialize"></BinaryString>
+			<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
+			<bool name="DefinesCapabilities">false</bool>
+			<string name="Name">FirefliModule</string>
+			<int64 name="SourceAssetId">72724044998053</int64>
+			<BinaryString name="Tags"></BinaryString>
+		</Properties>
+	</Item>
+</roblox>

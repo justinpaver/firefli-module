@@ -28,6 +28,8 @@
  Usage of this module assumes you have development knowledge.
  Don't know how to code? Don't use the module, or you can ask AI how to use it.
 
+ Made by stcteside, 2026
+
 ]]
 
 local HttpService = game:GetService("HttpService")
